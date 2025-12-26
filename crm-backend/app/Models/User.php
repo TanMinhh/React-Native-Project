@@ -41,4 +41,14 @@ class User extends Authenticatable
     {
         return in_array($this->role, $roles, true);
     }
+
+    public function manager()
+    {
+        return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    public function teamMembers()
+    {
+        return $this->hasMany(User::class, 'manager_id');
+    }
 }

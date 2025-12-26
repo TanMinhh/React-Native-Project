@@ -33,4 +33,13 @@ class NotificationController extends Controller
         $notification->update(['is_read' => true]);
         return $notification;
     }
+
+    public function badge()
+    {
+        $count = Notification::where('user_id', Auth::id())
+            ->where('is_read', false)
+            ->count();
+
+        return ['unread' => $count];
+    }
 }

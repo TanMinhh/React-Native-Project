@@ -13,6 +13,7 @@ class TaskRequest extends FormRequest
         if ($this->isMethod('post')) {
             return [
                 'title' => 'required|string|max:255',
+                'type' => 'nullable|in:CALL,MEET,NOTE,OTHER',
                 'lead_id' => 'nullable|exists:leads,id',
                 'opportunity_id' => 'nullable|exists:opportunities,id',
                 'due_date' => 'required|date',
@@ -23,6 +24,7 @@ class TaskRequest extends FormRequest
 
         return [
             'title' => 'sometimes|required|string|max:255',
+            'type' => 'sometimes|nullable|in:CALL,MEET,NOTE,OTHER',
             'lead_id' => 'sometimes|nullable|exists:leads,id',
             'opportunity_id' => 'sometimes|nullable|exists:opportunities,id',
             'due_date' => 'sometimes|required|date',

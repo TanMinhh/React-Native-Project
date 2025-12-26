@@ -11,7 +11,7 @@ class Task extends Model
     public const STATUS_OVERDUE = 'OVERDUE';
 
     protected $fillable = [
-        'title','lead_id','opportunity_id',
+        'title','type','lead_id','opportunity_id',
         'due_date','status','assigned_to'
     ];
 
@@ -22,6 +22,11 @@ class Task extends Model
     protected $appends = [
         'computed_status',
     ];
+
+    public function assignedUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
+    }
 
     public function getComputedStatusAttribute(): string
     {

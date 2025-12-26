@@ -18,8 +18,10 @@ class LeadRequest extends FormRequest
             'email'         => 'nullable|email',
             'phone_number'  => 'nullable|string|max:50',
             'company'       => 'nullable|string|max:255',
-            'status'        => 'nullable|in:NEW,CONTACTING,AGREEMENT,LOST',
+            'source'        => 'nullable|string|max:255',
+            'status'        => 'nullable|in:LEAD,CONTACTING,INTERESTED,NO_NEED,PURCHASED',
             'owner_id'      => 'sometimes|exists:users,id',
+            'assigned_to'   => 'sometimes|nullable|exists:users,id',
         ];
     }
 }
