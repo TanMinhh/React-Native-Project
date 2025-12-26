@@ -5,13 +5,18 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LeadRequest;
 use App\Http\Resources\LeadResource;
+use App\Models\BlockedContact;
 use App\Models\Lead;
 use App\Models\LeadAssignmentLog;
+use App\Models\LeadMergeLog;
 use App\Models\Notification;
+use App\Models\UserDevice;
 use App\Models\User;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Auth;
+use App\Services\FcmService;
 
 class LeadController extends Controller
 {
@@ -73,6 +78,32 @@ class LeadController extends Controller
         $data = $request->validated();
         /** @var \App\Models\User $user */
         $user = Auth::user();
+
+        // blocked contact check
+        if (!empty($data['phone_number']) && BlockedContact::where('phone', $data['phone_number'])->exists()) {
+            return response()->json(['message' => 'Phone is blocked'], 409);
+        }
+        if (!empty($data['email']) && BlockedContact::where('email', $data['email'])->exists()) {
+            return response()->json(['message' => 'Email is blocked'], 409);
+        }
+
+        // anti-duplicate/tranh khách
+        $existing = Lead::where(function($q) use ($data) {
+            if (!empty($data['phone_number'])) {
+                $q->orWhere('phone_number', $data['phone_number']);
+            }
+            if (!empty($data['email'])) {
+                $q->orWhere('email', $data['email']);
+            }
+        })->first();
+
+        if ($existing && !($user->isAdmin() || $user->isOwner())) {
+            return response()->json([
+                'message' => 'Lead already exists',
+                'lead_id' => $existing->id
+            ], 409);
+        }
+
         $data['owner_id'] = $user->isAdmin() && isset($data['owner_id'])
             ? $data['owner_id']
             : $user->id;
@@ -112,6 +143,9 @@ class LeadController extends Controller
                     'content' => "Lead {$lead->full_name} status changed to {$lead->status}",
                     'payload' => ['lead_id' => $lead->id, 'status' => $lead->status],
                 ]);
+
+                $tokens = UserDevice::where('user_id', $userId)->pluck('fcm_token')->toArray();
+                app(FcmService::class)->send($tokens, 'Lead status updated', "{$lead->full_name}: {$lead->status}", ['lead_id' => $lead->id]);
             }
         }
 
@@ -168,6 +202,57 @@ class LeadController extends Controller
             'type' => 'LEAD',
             'content' => 'Bạn được giao khách: '.$lead->full_name,
             'payload' => ['lead_id' => $lead->id],
+        ]);
+
+        $tokens = UserDevice::where('user_id', $targetId)->pluck('fcm_token')->toArray();
+        app(FcmService::class)->send($tokens, 'Lead assigned', $lead->full_name, ['lead_id' => $lead->id]);
+
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'lead_assign',
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'payload' => ['lead_id' => $lead->id, 'to_user' => $targetId],
+        ]);
+
+        return new LeadResource($lead->fresh(['owner','assignee']));
+    }
+
+    public function merge(Request $request, Lead $lead)
+    {
+        $request->validate([
+            'source_lead_id' => 'required|different:lead|exists:leads,id',
+            'note' => 'nullable|string'
+        ]);
+
+        $user = Auth::user();
+        if (!$user->isAdmin() && !$user->isOwner()) {
+            abort(403, 'Only admin/manager can merge leads');
+        }
+
+        $source = Lead::findOrFail($request->source_lead_id);
+
+        // move activities/tasks/attachments
+        \App\Models\Activity::where('lead_id', $source->id)->update(['lead_id' => $lead->id]);
+        \App\Models\Task::where('lead_id', $source->id)->update(['lead_id' => $lead->id]);
+        \App\Models\Attachment::where('lead_id', $source->id)->update(['lead_id' => $lead->id]);
+        \App\Models\Opportunity::where('lead_id', $source->id)->update(['lead_id' => $lead->id]);
+
+        LeadMergeLog::create([
+            'target_lead_id' => $lead->id,
+            'source_lead_id' => $source->id,
+            'merged_by' => $user->id,
+            'note' => $request->note,
+        ]);
+
+        $source->delete();
+
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'lead_merge',
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'payload' => ['target_lead_id' => $lead->id, 'source_lead_id' => $source->id],
         ]);
 
         return new LeadResource($lead->fresh(['owner','assignee']));

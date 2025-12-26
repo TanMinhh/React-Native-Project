@@ -57,9 +57,14 @@ class DashboardController extends Controller
         }
 
         $today = now()->toDateString();
+        $staleDate = now()->subDays(7);
 
         return response()->json([
             'leads_total' => $leadQuery->count(),
+            'leads_uncontacted' => (clone $leadQuery)->whereNull('last_activity_at')->count(),
+            'leads_stale_7d' => (clone $leadQuery)->where(function($q) use ($staleDate) {
+                $q->whereNull('last_activity_at')->orWhere('last_activity_at', '<', $staleDate);
+            })->count(),
             'tasks_today' => (clone $taskQuery)->whereDate('due_date', $today)->count(),
             'tasks_overdue' => (clone $taskQuery)->whereDate('due_date', '<', $today)->where('status', '!=', Task::STATUS_DONE)->count(),
             'opportunities_by_stage' => (clone $oppQuery)->selectRaw('stage, COUNT(*) as total')->groupBy('stage')->pluck('total','stage'),

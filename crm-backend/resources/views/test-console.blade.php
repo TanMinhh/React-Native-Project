@@ -33,6 +33,9 @@
         </div>
         <button onclick="doLogin()">Login</button>
         <button class="secondary" onclick="doRefresh()">Refresh token</button>
+        <button class="secondary" onclick="changePassword()">Change password</button>
+        <button class="secondary" onclick="forgotPassword()">Forgot (OTP demo)</button>
+        <button class="secondary" onclick="resetPassword()">Reset with OTP</button>
         <div style="margin-top:8px">
             <div><strong>Access:</strong> <span id="access-preview">-</span></div>
             <div><strong>Refresh:</strong> <span id="refresh-preview">-</span></div>
@@ -43,6 +46,7 @@
         <div class="pill">Leads</div>
         <button onclick="fetchLeads()">GET /api/leads</button>
         <button class="secondary" onclick="fetchDashboard()">GET /api/dashboard</button>
+        <button class="secondary" onclick="fetchBadge()">GET /notifications-badge</button>
         <div class="row">
             <div>
                 <label>Lead full_name</label>
@@ -74,6 +78,7 @@
                 <label>Assign to user id</label>
                 <input id="assign_user_id" />
                 <button onclick="assignLead()">POST /api/leads/:id/assign</button>
+                <button class="secondary" onclick="fetchAssignments()">GET /api/leads/:id/assignments</button>
             </div>
         </div>
     </div>
@@ -125,6 +130,7 @@
 <script>
 let accessToken = '';
 let refreshToken = '';
+let cachedOtp = '';
 
 function log(data) {
     const pretty = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
@@ -162,6 +168,46 @@ async function doRefresh() {
     log(json);
 }
 
+async function changePassword() {
+    const current_password = prompt("Nhap current password (>=12 chars)");
+    const new_password = prompt("Nhap new password (>=12 chars, khac password cu)");
+    if (!current_password || !new_password) return;
+    const res = await fetch('/api/password/change', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ current_password, new_password })
+    });
+    const data = await res.json();
+    log({ status: res.status, data });
+}
+
+async function forgotPassword() {
+    const email = prompt('Nhap email reset', document.getElementById('email').value);
+    if (!email) return;
+    const res = await fetch('/api/forgot', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    cachedOtp = data.otp_demo || '';
+    log({ status: res.status, data, hint_otp: cachedOtp });
+}
+
+async function resetPassword() {
+    const email = prompt('Email', document.getElementById('email').value);
+    const otp = prompt('OTP 6 digits (demo trả về ở forgot)', cachedOtp);
+    const password = prompt('New password (>=12 chars)');
+    if (!email || !otp || !password) return;
+    const res = await fetch('/api/reset', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email, otp, password })
+    });
+    const data = await res.json();
+    log({ status: res.status, data });
+}
+
 function authHeaders() {
     if (!accessToken) throw new Error('Login first');
     return { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
@@ -174,6 +220,11 @@ async function fetchLeads() {
 
 async function fetchDashboard() {
     const res = await fetch('/api/dashboard', { headers: authHeaders() });
+    log(await res.json());
+}
+
+async function fetchBadge() {
+    const res = await fetch('/api/notifications-badge', { headers: authHeaders() });
     log(await res.json());
 }
 
@@ -217,6 +268,13 @@ async function assignLead() {
         headers: authHeaders(),
         body: JSON.stringify({ assigned_to: Number(target) })
     });
+    log(await res.json());
+}
+
+async function fetchAssignments() {
+    const id = document.getElementById('lead_id').value;
+    if (!id) return log('Lead ID required');
+    const res = await fetch(`/api/leads/${id}/assignments`, { headers: authHeaders() });
     log(await res.json());
 }
 
@@ -272,3 +330,5 @@ async function sendRaw() {
 </script>
 </body>
 </html>
+
+
