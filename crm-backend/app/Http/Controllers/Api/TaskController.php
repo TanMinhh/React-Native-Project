@@ -20,13 +20,34 @@ class TaskController extends Controller
         $query = Task::with('assignedUser');
 
         /** @var \App\Models\User $user */
-        if (!$user->isAdmin()) {
+        if ($user->isAdmin()) {
+            // no filter
+        } elseif ($user->isOwner()) {
+            $teamIds = $user->teamMembers()->pluck('id')->toArray();
+            $query->where(function($q) use ($user, $teamIds) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhereIn('assigned_to', $teamIds);
+            });
+        } else {
             $query->where('assigned_to', $user->id);
         }
 
-        $query->search($request->search);
+        if ($status = $request->status) {
+            $query->where('status', $status);
+        }
 
-        return TaskResource::collection($query->paginate(10));
+        if ($when = $request->when) {
+            if ($when === 'today') {
+                $query->whereDate('due_date', now()->toDateString());
+            } elseif ($when === 'overdue') {
+                $query->whereDate('due_date', '<', now()->toDateString())
+                      ->where('status', '!=', Task::STATUS_DONE);
+            } elseif ($when === 'upcoming') {
+                $query->whereDate('due_date', '>', now()->toDateString());
+            }
+        }
+
+        return TaskResource::collection($query->orderBy('due_date')->paginate(10));
     }
 
     public function store(TaskRequest $request)

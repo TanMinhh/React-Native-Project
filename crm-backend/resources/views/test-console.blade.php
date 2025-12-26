@@ -42,16 +42,18 @@
     <div class="card">
         <div class="pill">Leads</div>
         <button onclick="fetchLeads()">GET /api/leads</button>
+        <button class="secondary" onclick="fetchDashboard()">GET /api/dashboard</button>
         <div class="row">
             <div>
                 <label>Lead full_name</label>
                 <input id="lead_name" value="Lead demo" />
                 <label>Status</label>
                 <select id="lead_status">
-                    <option value="NEW">NEW</option>
+                    <option value="LEAD">LEAD</option>
                     <option value="CONTACTING">CONTACTING</option>
-                    <option value="AGREEMENT">AGREEMENT</option>
-                    <option value="LOST">LOST</option>
+                    <option value="INTERESTED">INTERESTED</option>
+                    <option value="NO_NEED">NO_NEED</option>
+                    <option value="PURCHASED">PURCHASED</option>
                 </select>
                 <button onclick="createLead()">POST /api/leads</button>
             </div>
@@ -61,13 +63,17 @@
                 <label>New status</label>
                 <select id="lead_status_update">
                     <option value="">(no change)</option>
-                    <option value="NEW">NEW</option>
+                    <option value="LEAD">LEAD</option>
                     <option value="CONTACTING">CONTACTING</option>
-                    <option value="AGREEMENT">AGREEMENT</option>
-                    <option value="LOST">LOST</option>
+                    <option value="INTERESTED">INTERESTED</option>
+                    <option value="NO_NEED">NO_NEED</option>
+                    <option value="PURCHASED">PURCHASED</option>
                 </select>
                 <button onclick="updateLead()">PUT /api/leads/:id</button>
                 <button class="secondary" onclick="deleteLead()">DELETE /api/leads/:id</button>
+                <label>Assign to user id</label>
+                <input id="assign_user_id" />
+                <button onclick="assignLead()">POST /api/leads/:id/assign</button>
             </div>
         </div>
     </div>
@@ -166,6 +172,11 @@ async function fetchLeads() {
     log(await res.json());
 }
 
+async function fetchDashboard() {
+    const res = await fetch('/api/dashboard', { headers: authHeaders() });
+    log(await res.json());
+}
+
 async function createLead() {
     const full_name = document.getElementById('lead_name').value;
     const status = document.getElementById('lead_status').value;
@@ -195,6 +206,18 @@ async function deleteLead() {
     if (!id) return log('Lead ID required');
     const res = await fetch(`/api/leads/${id}`, { method: 'DELETE', headers: authHeaders() });
     log({ status: res.status });
+}
+
+async function assignLead() {
+    const id = document.getElementById('lead_id').value;
+    const target = document.getElementById('assign_user_id').value;
+    if (!id || !target) return log('Lead ID and assign user id required');
+    const res = await fetch(`/api/leads/${id}/assign`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ assigned_to: Number(target) })
+    });
+    log(await res.json());
 }
 
 async function fetchTasks() {

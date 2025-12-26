@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\AttachmentController;
+use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\DashboardController;
 
 Route::post('/login',[AuthController::class,'login'])->name('auth.login');
 Route::post('/register',[AuthController::class,'register'])->name('auth.register');
@@ -18,6 +20,7 @@ Route::middleware('jwt')->group(function () {
     Route::post('/logout',[AuthController::class,'logout']);
 
     Route::apiResource('leads',LeadController::class)->only(['index','store','show','update','destroy']);
+    Route::post('/leads/{lead}/assign', [LeadController::class, 'assign']);
     Route::get('/leads/{lead}/activities', [LeadController::class, 'activities']);
     Route::post('/activities',[ActivityController::class,'store']);
     Route::apiResource('tasks',TaskController::class)->only(['index','store','show','update','destroy']);
@@ -25,6 +28,10 @@ Route::middleware('jwt')->group(function () {
     Route::get('/notifications',[NotificationController::class,'index']);
     Route::get('/notifications/{notification}',[NotificationController::class,'show']);
     Route::put('/notifications/{notification}/read',[NotificationController::class,'markAsRead']);
+    Route::get('/notifications-badge',[NotificationController::class,'badge']);
     Route::post('/attachments',[AttachmentController::class,'store']);
     Route::delete('/attachments/{attachment}',[AttachmentController::class,'destroy']);
+
+    Route::apiResource('users', UserController::class)->only(['index','store','update','destroy']);
+    Route::get('/dashboard', DashboardController::class);
 });

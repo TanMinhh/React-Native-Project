@@ -19,16 +19,22 @@ class ActivityController extends Controller
             'type' => 'required|in:CALL,EMAIL,MESSAGE,MEETING,NOTE',
             'content' => 'required|string',
             'lead_id' => 'required|exists:leads,id',
+            'happened_at' => 'nullable|date',
         ]);
 
         $lead = Lead::findOrFail($data['lead_id']);
         $this->authorize('view', $lead);
 
-        return Activity::create([
+        $activity = Activity::create([
             'type'=>$data['type'],
             'content'=>$data['content'],
             'lead_id'=>$data['lead_id'],
-            'user_id'=>Auth::id()
+            'user_id'=>Auth::id(),
+            'happened_at' => $data['happened_at'] ?? now(),
         ]);
+
+        $lead->update(['last_activity_at' => $activity->happened_at]);
+
+        return $activity;
     }
 }

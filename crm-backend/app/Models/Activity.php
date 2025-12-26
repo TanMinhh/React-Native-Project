@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 class Activity extends Model
 {
     protected $fillable = [
-        'type','content','lead_id','user_id'
+        'type','content','lead_id','user_id','happened_at'
     ];
+
+    protected $casts = [
+        'happened_at' => 'datetime',
+    ];
+
+    public function lead()
+    {
+        return $this->belongsTo(Lead::class);
+    }
 }
