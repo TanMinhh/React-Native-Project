@@ -21,6 +21,11 @@ class NotificationController extends Controller
         if (!$user->isAdmin() && $notification->user_id !== $user->id) {
             abort(403, 'Unauthorized access to this notification.');
         }
+
+        // auto mark as read when opened by owner
+        if ($notification->user_id === $user->id && !$notification->is_read) {
+            $notification->update(['is_read' => true]);
+        }
         return $notification;
     }
 
@@ -41,5 +46,14 @@ class NotificationController extends Controller
             ->count();
 
         return ['unread' => $count];
+    }
+
+    public function taskDueSoon()
+    {
+        return Notification::where('user_id', Auth::id())
+            ->where('type', 'TASK')
+            ->where('is_read', false)
+            ->orderByDesc('created_at')
+            ->get();
     }
 }
