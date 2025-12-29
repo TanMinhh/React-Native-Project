@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Firebase\JWT\JWT;
 use Carbon\Carbon;
@@ -64,8 +65,25 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
+        $user = $request->user();
+        $user->load(['team', 'manager']);
+        
+        $userData = $user->toArray();
+        
+        // Add team info for display
+        if ($user->team) {
+            $userData['team_name'] = $user->team->name;
+        }
+        
+        // For managers, add member count
+        if ($user->isOwner() && $user->team_id) {
+            $userData['team_member_count'] = User::where('team_id', $user->team_id)
+                ->where('role', 'staff')
+                ->count();
+        }
+        
         return response()->json([
-            'user' => $request->user(),
+            'user' => $userData,
         ]);
     }
 
@@ -138,14 +156,14 @@ class AuthController extends Controller
 
     public function forgot(ForgotPasswordRequest $request)
     {
-        $existing = DB::table('password_reset_tokens')->where('email', $request->email)->first();
+        $existing = DB::table('password_resets')->where('email', $request->email)->first();
         if ($existing && now()->diffInSeconds($existing->created_at) < 60) {
             return response()->json(['message' => 'Please wait before requesting another OTP'], 429);
         }
         $otp = random_int(100000, 999999);
-        DB::table('password_reset_tokens')->updateOrInsert(
+        DB::table('password_resets')->updateOrInsert(
             ['email' => $request->email],
-            ['token' => hash('sha256', (string) $otp), 'created_at' => now()]
+            ['otp' => (string) $otp, 'expires_at' => now()->addMinutes(10), 'used' => false, 'created_at' => now(), 'updated_at' => now()]
         );
 
         try {
@@ -161,25 +179,24 @@ class AuthController extends Controller
 
     public function reset(ResetPasswordRequest $request)
     {
-        $record = DB::table('password_reset_tokens')->where('email', $request->email)->first();
+        $record = DB::table('password_resets')->where('email', $request->email)->where('used', false)->first();
         if (!$record) {
             return response()->json(['message' => 'Invalid OTP'], 400);
         }
 
-        if (now()->diffInMinutes($record->created_at) > 10) {
-            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+        if (now()->gt($record->expires_at)) {
+            DB::table('password_resets')->where('email', $request->email)->delete();
             return response()->json(['message' => 'OTP expired'], 400);
         }
 
-        $hashed = hash('sha256', $request->otp);
-        if ($hashed !== $record->token) {
+        if ($request->otp !== $record->otp) {
             return response()->json(['message' => 'Invalid OTP'], 400);
         }
 
         $user = User::where('email', $request->email)->firstOrFail();
         $user->update(['password' => Hash::make($request->password)]);
 
-        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+        DB::table('password_resets')->where('email', $request->email)->delete();
         RefreshToken::where('user_id', $user->id)->update(['revoked' => true]);
 
         AuditLog::create([

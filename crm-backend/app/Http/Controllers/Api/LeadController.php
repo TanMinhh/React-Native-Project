@@ -162,7 +162,7 @@ class LeadController extends Controller
     public function activities(Lead $lead)
     {
         $this->authorize('view', $lead);
-        return $lead->activities;
+        return $lead->activities()->with('user')->orderBy('created_at', 'desc')->get();
     }
 
     public function assign(Request $request, Lead $lead)

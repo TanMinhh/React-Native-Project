@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Task extends Model
 {
@@ -12,7 +13,7 @@ class Task extends Model
 
     protected $fillable = [
         'title','type','lead_id','opportunity_id',
-        'due_date','status','assigned_to'
+        'due_date','status','assigned_to','team_id','created_by'
     ];
 
     protected $casts = [
@@ -23,9 +24,24 @@ class Task extends Model
         'computed_status',
     ];
 
-    public function assignedUser()
+    public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'team_id');
+    }
+
+    public function lead(): BelongsTo
+    {
+        return $this->belongsTo(Lead::class, 'lead_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function getComputedStatusAttribute(): string
@@ -39,11 +55,6 @@ class Task extends Model
         }
 
         return $this->status ?? self::STATUS_IN_PROGRESS;
-    }
-
-    public function assignedUser()
-    {
-        return $this->belongsTo(User::class, 'assigned_to');
     }
 
     public function scopeSearch($query, $term)

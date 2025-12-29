@@ -16,6 +16,35 @@ class UserController extends Controller
         return UserResource::collection(User::paginate(15));
     }
 
+    /**
+     * Get team members for the current manager/owner
+     * Returns all staff members that the manager can assign leads to
+     */
+    public function teamMembers()
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        if (!$user) {
+            abort(401, 'Unauthorized');
+        }
+
+        // Admin can see all staff
+        if ($user->isAdmin()) {
+            $members = User::where('role', 'staff')->get();
+        } elseif ($user->isOwner()) {
+            // Manager/Owner sees staff in their team
+            $members = User::where('team_id', $user->team_id)
+                ->where('role', 'staff')
+                ->get();
+        } else {
+            // Staff only sees themselves
+            $members = collect([$user]);
+        }
+
+        return response()->json(['data' => UserResource::collection($members)]);
+    }
+
     public function store(UserRequest $request)
     {
         $this->authorizeAdmin();

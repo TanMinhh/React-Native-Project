@@ -48,6 +48,15 @@ class NotificationController extends Controller
         return ['unread' => $count];
     }
 
+    public function markAllAsRead()
+    {
+        Notification::where('user_id', Auth::id())
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        return response()->json(['message' => 'All notifications marked as read']);
+    }
+
     public function taskDueSoon()
     {
         return Notification::where('user_id', Auth::id())

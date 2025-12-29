@@ -55,5 +55,16 @@ class UserSeeder extends Seeder
         // Ensure predefined staff linked to first owner
         $staff->manager_id = $ownerIds->first();
         $staff->save();
+
+        // Custom test user - Sales in Team 2
+        User::firstOrCreate(
+            ['email' => 'tduongtanphuoc1999@gmail.com'],
+            [
+                'name' => 'Tan Phuoc',
+                'password' => Hash::make('pass123456'),
+                'role' => 'staff',
+                'team_id' => 2,
+            ]
+        );
     }
 }

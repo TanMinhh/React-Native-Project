@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\TaskRequest;
 use App\Http\Resources\TaskResource;
 use App\Models\Task;
+use App\Models\Activity;
+use App\Models\Lead;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -36,6 +39,10 @@ class TaskController extends Controller
             $query->where('status', $status);
         }
 
+        if ($leadId = $request->lead_id) {
+            $query->where('lead_id', $leadId);
+        }
+
         if ($when = $request->when) {
             if ($when === 'today') {
                 $query->whereDate('due_date', now()->toDateString());
@@ -54,19 +61,67 @@ class TaskController extends Controller
     {
         $this->authorize('create', Task::class);
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $data = $request->validated();
 
-        /** @var \App\Models\User $user */
-        if (!$user->isAdmin()) {
+        // Manager can assign to others, staff can only assign to self
+        if ($user->isOwner() && !empty($data['assigned_to'])) {
+            // Keep the assigned_to from request
+        } elseif (!$user->isAdmin()) {
             $data['assigned_to'] = $user->id;
         } elseif (empty($data['assigned_to'])) {
             $data['assigned_to'] = $user->id;
         }
 
         $data['status'] = $data['status'] ?? Task::STATUS_IN_PROGRESS;
+        $data['created_by'] = $user->id;
+
+        // Set team_id from lead if available
+        if (!empty($data['lead_id'])) {
+            $lead = Lead::find($data['lead_id']);
+            if ($lead) {
+                $data['team_id'] = $lead->team_id;
+            }
+        }
 
         $task = Task::create($data);
+
+        // Create notification for task assignment (if assigned to different user)
+        $assignedTo = $data['assigned_to'];
+        if ($assignedTo && $assignedTo != $user->id) {
+            Notification::create([
+                'user_id' => $assignedTo,
+                'type' => Notification::TYPE_TASK_ASSIGNED,
+                'content' => "Bạn được giao công việc: {$task->title}",
+                'payload' => [
+                    'task_id' => $task->id,
+                    'lead_id' => $data['lead_id'] ?? null,
+                    'assigned_by' => $user->id,
+                    'assigned_by_name' => $user->name,
+                ],
+            ]);
+        }
+
+        // Create activity for task assignment if lead_id exists
+        if (!empty($data['lead_id'])) {
+            $assignedUser = $task->assignedUser;
+            Activity::create([
+                'type' => 'TASK',
+                'title' => 'Giao công việc',
+                'content' => "Công việc: {$task->title}" . ($assignedUser ? " - Giao cho: {$assignedUser->name}" : ""),
+                'lead_id' => $data['lead_id'],
+                'user_id' => $user->id,
+                'happened_at' => now(),
+            ]);
+
+            // Update lead's last_activity_at
+            $lead = Lead::find($data['lead_id']);
+            if ($lead) {
+                $lead->update(['last_activity_at' => now()]);
+            }
+        }
+
         return new TaskResource($task);
     }
 

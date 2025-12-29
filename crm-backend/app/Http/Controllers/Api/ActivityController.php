@@ -16,7 +16,8 @@ class ActivityController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'type' => 'required|in:CALL,EMAIL,MESSAGE,MEETING,NOTE',
+            'type' => 'required|in:CALL,TASK,NOTE',
+            'title' => 'nullable|string|max:255',
             'content' => 'required|string',
             'lead_id' => 'required|exists:leads,id',
             'happened_at' => 'nullable|date',
@@ -27,6 +28,7 @@ class ActivityController extends Controller
 
         $activity = Activity::create([
             'type'=>$data['type'],
+            'title'=>$data['title'] ?? null,
             'content'=>$data['content'],
             'lead_id'=>$data['lead_id'],
             'user_id'=>Auth::id(),

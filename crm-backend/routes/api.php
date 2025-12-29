@@ -38,6 +38,7 @@ Route::middleware('jwt')->group(function () {
     Route::get('/notifications',[NotificationController::class,'index']);
     Route::get('/notifications/{notification}',[NotificationController::class,'show']);
     Route::put('/notifications/{notification}/read',[NotificationController::class,'markAsRead']);
+    Route::put('/notifications/read-all',[NotificationController::class,'markAllAsRead']);
     Route::get('/notifications-badge',[NotificationController::class,'badge']);
     Route::get('/notifications/task-due-soon',[NotificationController::class,'taskDueSoon']);
     Route::post('/attachments',[AttachmentController::class,'store']);
@@ -47,5 +48,6 @@ Route::middleware('jwt')->group(function () {
     Route::delete('/attachments/{attachment}',[AttachmentController::class,'destroy']);
 
     Route::apiResource('users', UserController::class)->only(['index','store','update','destroy']);
+    Route::get('/team-members', [UserController::class, 'teamMembers']);
     Route::get('/dashboard', DashboardController::class);
 });

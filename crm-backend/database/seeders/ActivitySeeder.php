@@ -9,7 +9,7 @@ class ActivitySeeder extends Seeder
 {
     public function run(): void
     {
-        $types = ['CALL','EMAIL','MESSAGE','MEETING','NOTE'];
+        $types = ['CALL','TASK','NOTE'];
         $staffs = DB::table('users')->where('role', 'staff')->pluck('id');
         $userDefault = $staffs->first() ?? 1;
 

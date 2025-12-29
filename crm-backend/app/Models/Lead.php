@@ -4,20 +4,22 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Lead extends Model
 {
     use HasFactory;
 
     public const STATUS_LEAD = 'LEAD';
-    public const STATUS_CONTACTING = 'CONTACTING';
-    public const STATUS_INTERESTED = 'INTERESTED';
+    public const STATUS_CONTACTED = 'CONTACTED';
+    public const STATUS_CARING = 'CARING';
     public const STATUS_NO_NEED = 'NO_NEED';
     public const STATUS_PURCHASED = 'PURCHASED';
 
     protected $fillable = [
         'full_name','email','phone_number','company','source',
-        'status','owner_id','assigned_to','assigned_by','assigned_at','last_activity_at','unread_by_owner'
+        'status','owner_id','assigned_to','assigned_by','assigned_at','last_activity_at','unread_by_owner','team_id'
     ];
 
     protected $casts = [
@@ -26,17 +28,22 @@ class Lead extends Model
         'last_activity_at' => 'datetime',
     ];
 
-    public function owner()
+    public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
     }
 
-    public function assignee()
+    public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
-    public function activities()
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'team_id');
+    }
+
+    public function activities(): HasMany
     {
         return $this->hasMany(Activity::class);
     }
