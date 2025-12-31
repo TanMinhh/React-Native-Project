@@ -9,8 +9,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            UserSeeder::class,
+            TeamSeeder::class,  // Creates teams, managers, and sales
             LeadSeeder::class,
+            LeadAssignmentLogSeeder::class,
             OpportunitySeeder::class,
             TaskSeeder::class,
             ActivitySeeder::class,

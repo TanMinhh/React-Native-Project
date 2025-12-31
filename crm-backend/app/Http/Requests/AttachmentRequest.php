@@ -16,7 +16,7 @@ class AttachmentRequest extends FormRequest
     public function rules()
     {
         return [
-            'file' => 'required|file|max:10240',
+            'file' => 'required|file|max:5120|mimes:jpeg,png,pdf,doc,docx',
             'lead_id' => 'nullable|exists:leads,id',
             'task_id' => 'nullable|exists:tasks,id',
         ];

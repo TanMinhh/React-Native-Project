@@ -16,19 +16,27 @@ class ActivityController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'type' => 'required|in:CALL,EMAIL,MESSAGE,MEETING,NOTE',
+            'type' => 'required|in:CALL,TASK,NOTE',
+            'title' => 'nullable|string|max:255',
             'content' => 'required|string',
             'lead_id' => 'required|exists:leads,id',
+            'happened_at' => 'nullable|date',
         ]);
 
         $lead = Lead::findOrFail($data['lead_id']);
         $this->authorize('view', $lead);
 
-        return Activity::create([
+        $activity = Activity::create([
             'type'=>$data['type'],
+            'title'=>$data['title'] ?? null,
             'content'=>$data['content'],
             'lead_id'=>$data['lead_id'],
-            'user_id'=>Auth::id()
+            'user_id'=>Auth::id(),
+            'happened_at' => $data['happened_at'] ?? now(),
         ]);
+
+        $lead->update(['last_activity_at' => $activity->happened_at]);
+
+        return $activity;
     }
 }

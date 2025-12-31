@@ -11,7 +11,7 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         // Admin
-        User::firstOrCreate(
+        $admin = User::firstOrCreate(
             ['email' => 'admin@crm.test'],
             [
                 'name' => 'Admin User',
@@ -21,7 +21,7 @@ class UserSeeder extends Seeder
         );
 
         // Specific Owner
-        User::firstOrCreate(
+        $owner = User::firstOrCreate(
             ['email' => 'owner@crm.test'],
             [
                 'name' => 'Owner User',
@@ -31,7 +31,7 @@ class UserSeeder extends Seeder
         );
 
         // Specific Staff
-        User::firstOrCreate(
+        $staff = User::firstOrCreate(
             ['email' => 'staff@crm.test'],
             [
                 'name' => 'Staff User',
@@ -41,13 +41,30 @@ class UserSeeder extends Seeder
         );
 
         // Owners
-        User::factory()->count(3)->create([
+        $owners = User::factory()->count(2)->create([
             'role' => 'owner',
         ]);
 
-        // Staffs
-        User::factory()->count(6)->create([
+        // Staffs with manager assignment
+        $ownerIds = collect([$owner->id])->merge($owners->pluck('id'))->values();
+        $staffs = User::factory()->count(6)->create([
             'role' => 'staff',
+            'manager_id' => $ownerIds->random(),
         ]);
+
+        // Ensure predefined staff linked to first owner
+        $staff->manager_id = $ownerIds->first();
+        $staff->save();
+
+        // Custom test user - Sales in Team 2
+        User::firstOrCreate(
+            ['email' => 'tduongtanphuoc1999@gmail.com'],
+            [
+                'name' => 'Tan Phuoc',
+                'password' => Hash::make('pass123456'),
+                'role' => 'staff',
+                'team_id' => 2,
+            ]
+        );
     }
 }
