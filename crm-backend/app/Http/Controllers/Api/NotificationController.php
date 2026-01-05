@@ -3,7 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Lead;
 use App\Models\Notification;
+use App\Models\Task;
+use App\Models\UserDevice;
+use App\Services\FcmService;
 use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
@@ -64,5 +68,77 @@ class NotificationController extends Controller
             ->where('is_read', false)
             ->orderByDesc('created_at')
             ->get();
+    }
+
+    public function taskReminders()
+    {
+        $userId = Auth::id();
+        $tasks = Task::whereNotNull('reminder_at')
+            ->whereNull('reminder_sent_at')
+            ->where('status', '!=', Task::STATUS_DONE)
+            ->where('assigned_to', $userId)
+            ->where('reminder_at', '<=', now())
+            ->get();
+
+        foreach ($tasks as $task) {
+            Notification::create([
+                'user_id' => $userId,
+                'type' => 'TASK_REMINDER',
+                'content' => "Nhắc việc: {$task->title}",
+                'payload' => [
+                    'task_id' => $task->id,
+                    'lead_id' => $task->lead_id,
+                    'reminder_at' => $task->reminder_at,
+                ],
+            ]);
+
+            $tokens = UserDevice::where('user_id', $userId)->pluck('fcm_token')->toArray();
+            if ($tokens) {
+                app(FcmService::class)->send($tokens, 'Task reminder', $task->title, ['task_id' => $task->id]);
+            }
+
+            $task->update(['reminder_sent_at' => now()]);
+        }
+
+        return response()->json(['count' => $tasks->count()]);
+    }
+
+    public function followUpDue()
+    {
+        $user = Auth::user();
+
+        $leadQuery = Lead::query();
+        if ($user->isAdmin()) {
+            // no restrictions
+        } elseif ($user->isOwner()) {
+            $teamIds = $user->teamMembers()->pluck('id')->toArray();
+            $leadQuery->where(function($q) use ($user, $teamIds) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhereIn('assigned_to', $teamIds);
+            });
+        } else {
+            $leadQuery->where('assigned_to', $user->id);
+        }
+
+        $leads = $leadQuery
+            ->whereNotNull('last_activity_at')
+            ->whereRaw('last_activity_at < DATE_SUB(NOW(), INTERVAL IFNULL(follow_up_sla_days, 3) DAY)')
+            ->where(function($q) {
+                $q->whereNull('last_follow_up_notified_at')
+                  ->orWhere('last_follow_up_notified_at', '<', now()->subDays(1));
+            })
+            ->get();
+
+        foreach ($leads as $lead) {
+            Notification::create([
+                'user_id' => $lead->assigned_to ?? $lead->owner_id,
+                'type' => 'LEAD_FOLLOW_UP',
+                'content' => "Lead cần follow-up: {$lead->full_name}",
+                'payload' => ['lead_id' => $lead->id],
+            ]);
+            $lead->update(['last_follow_up_notified_at' => now()]);
+        }
+
+        return response()->json(['count' => $leads->count()]);
     }
 }

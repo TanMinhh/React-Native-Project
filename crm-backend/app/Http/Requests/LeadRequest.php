@@ -18,10 +18,21 @@ class LeadRequest extends FormRequest
             'email'         => 'nullable|email',
             'phone_number'  => 'nullable|string|max:50',
             'company'       => 'nullable|string|max:255',
+            'budget'        => 'nullable|numeric|min:0',
+            'address'       => 'nullable|string|max:255',
+            'note'          => 'nullable|string',
+            'last_contact_at' => 'nullable|date',
             'source'        => 'nullable|string|max:255',
+            'source_detail' => 'nullable|string|max:255',
+            'campaign'      => 'nullable|string|max:255',
+            'score'         => 'nullable|integer|min:0|max:100',
+            'priority'      => 'nullable|in:LOW,MEDIUM,HIGH',
+            'custom_fields' => 'nullable|array',
             'status'        => 'nullable|in:LEAD,CONTACTED,CARING,NO_NEED,PURCHASED',
             'owner_id'      => 'sometimes|exists:users,id',
             'assigned_to'   => 'sometimes|nullable|exists:users,id',
+            'team_id'       => 'sometimes|nullable|exists:teams,id',
+            'follow_up_sla_days' => 'sometimes|integer|min:1|max:365',
         ];
 
         // full_name is required only when creating a new lead

@@ -15,6 +15,7 @@ class Team extends Model
         'name',
         'description',
         'manager_id',
+        'last_assigned_user_id',
         'is_active',
     ];
 
@@ -28,6 +29,11 @@ class Team extends Model
     public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    public function lastAssignedUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'last_assigned_user_id');
     }
 
     /**

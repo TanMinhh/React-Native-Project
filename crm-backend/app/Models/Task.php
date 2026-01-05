@@ -13,11 +13,15 @@ class Task extends Model
 
     protected $fillable = [
         'title','type','lead_id','opportunity_id',
-        'due_date','status','assigned_to','team_id','created_by'
+        'description','notes','due_date','status','assigned_to','team_id','created_by','completed_at',
+        'recurrence_type','recurrence_interval','recurrence_end_date','reminder_at'
     ];
 
     protected $casts = [
         'due_date' => 'date',
+        'completed_at' => 'datetime',
+        'recurrence_end_date' => 'date',
+        'reminder_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -39,9 +43,29 @@ class Task extends Model
         return $this->belongsTo(Lead::class, 'lead_id');
     }
 
+    public function opportunity(): BelongsTo
+    {
+        return $this->belongsTo(Opportunity::class, 'opportunity_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function subtasks()
+    {
+        return $this->hasMany(TaskSubtask::class);
+    }
+
+    public function histories()
+    {
+        return $this->hasMany(TaskHistory::class);
+    }
+
+    public function tags()
+    {
+        return $this->belongsToMany(TaskTag::class, 'task_tag_task')->withTimestamps();
     }
 
     public function getComputedStatusAttribute(): string

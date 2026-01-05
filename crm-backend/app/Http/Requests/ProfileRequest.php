@@ -10,8 +10,11 @@ class ProfileRequest extends FormRequest
     {
         return [
             'name' => 'sometimes|string|max:255',
+            'phone' => 'sometimes|nullable|string|max:30',
+            'avatar' => 'sometimes|nullable|string|max:255',
             'notifications_enabled' => 'sometimes|boolean',
             'theme' => 'sometimes|string|in:light,dark,system',
+            'language' => 'sometimes|string|in:vi,en',
         ];
     }
 }

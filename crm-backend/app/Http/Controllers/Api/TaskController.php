@@ -9,6 +9,8 @@ use App\Models\Task;
 use App\Models\Activity;
 use App\Models\Lead;
 use App\Models\Notification;
+use App\Models\TaskHistory;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -20,7 +22,7 @@ class TaskController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $query = Task::with('assignedUser');
+        $query = Task::with(['assignedUser', 'lead', 'opportunity', 'creator', 'tags']);
 
         /** @var \App\Models\User $user */
         if ($user->isAdmin()) {
@@ -53,8 +55,21 @@ class TaskController extends Controller
                 $query->whereDate('due_date', '>', now()->toDateString());
             }
         }
+        if ($search = $request->input('q')) {
+            $query->search($search)
+                ->orWhereHas('tags', function($q) use ($search) {
+                    $q->where('name', 'like', "%$search%");
+                });
+        }
+        if ($tagIds = $request->input('tag_ids')) {
+            $ids = is_array($tagIds) ? $tagIds : explode(',', $tagIds);
+            $query->whereHas('tags', function($q) use ($ids) {
+                $q->whereIn('task_tags.id', $ids);
+            });
+        }
 
-        return TaskResource::collection($query->orderBy('due_date')->paginate(10));
+        $perPage = (int) $request->get('per_page', 10);
+        return TaskResource::collection($query->orderByDesc('created_at')->paginate($perPage));
     }
 
     public function store(TaskRequest $request)
@@ -76,6 +91,9 @@ class TaskController extends Controller
 
         $data['status'] = $data['status'] ?? Task::STATUS_IN_PROGRESS;
         $data['created_by'] = $user->id;
+        if (($data['status'] ?? null) === Task::STATUS_DONE) {
+            $data['completed_at'] = now();
+        }
 
         // Set team_id from lead if available
         if (!empty($data['lead_id'])) {
@@ -85,7 +103,14 @@ class TaskController extends Controller
             }
         }
 
+        $tagIds = $data['tag_ids'] ?? [];
+        unset($data['tag_ids']);
+
         $task = Task::create($data);
+        if ($tagIds) {
+            $task->tags()->sync($tagIds);
+        }
+        $this->logHistory($task, $user->id, 'created', $data);
 
         // Create notification for task assignment (if assigned to different user)
         $assignedTo = $data['assigned_to'];
@@ -122,13 +147,13 @@ class TaskController extends Controller
             }
         }
 
-        return new TaskResource($task);
+        return new TaskResource($task->load(['assignedUser', 'lead', 'opportunity', 'creator', 'subtasks', 'histories.user', 'tags']));
     }
 
     public function show(Task $task)
     {
         $this->authorize('view', $task);
-        return new TaskResource($task->load('assignedUser'));
+        return new TaskResource($task->load(['assignedUser', 'lead', 'opportunity', 'creator', 'subtasks', 'histories.user', 'tags']));
     }
 
     public function update(TaskRequest $request, Task $task)
@@ -142,8 +167,25 @@ class TaskController extends Controller
             $data['assigned_to'] = $user->id;
         }
 
+        $tagIds = $data['tag_ids'] ?? null;
+        unset($data['tag_ids']);
+
+        if (($data['status'] ?? null) === Task::STATUS_DONE && !$task->completed_at) {
+            $data['completed_at'] = now();
+        }
+
         $task->update($data);
-        return new TaskResource($task);
+        if (is_array($tagIds)) {
+            $task->tags()->sync($tagIds);
+        }
+        $this->logHistory($task, $user->id, 'updated', $data);
+
+        if (($data['status'] ?? null) === Task::STATUS_DONE) {
+            $this->handleRecurrence($task);
+            $this->logHistory($task, $user->id, 'completed', ['completed_at' => $task->completed_at]);
+        }
+
+        return new TaskResource($task->load(['assignedUser', 'lead', 'opportunity', 'creator', 'subtasks', 'histories.user', 'tags']));
     }
 
     public function destroy(Task $task)
@@ -151,5 +193,52 @@ class TaskController extends Controller
         $this->authorize('delete', $task);
         $task->delete();
         return response()->noContent();
+    }
+
+    private function handleRecurrence(Task $task): void
+    {
+        if (!$task->recurrence_type || !$task->due_date) {
+            return;
+        }
+
+        $nextDue = Carbon::parse($task->due_date);
+        $interval = max(1, (int) $task->recurrence_interval);
+
+        if ($task->recurrence_type === 'DAILY') {
+            $nextDue = $nextDue->addDays($interval);
+        } elseif ($task->recurrence_type === 'WEEKLY') {
+            $nextDue = $nextDue->addWeeks($interval);
+        } else {
+            $nextDue = $nextDue->addMonths($interval);
+        }
+
+        if ($task->recurrence_end_date && $nextDue->gt(Carbon::parse($task->recurrence_end_date))) {
+            return;
+        }
+
+        $newTask = $task->replicate([
+            'status',
+            'completed_at',
+            'created_at',
+            'updated_at',
+        ]);
+        $newTask->status = Task::STATUS_IN_PROGRESS;
+        $newTask->completed_at = null;
+        $newTask->due_date = $nextDue;
+        $newTask->save();
+
+        $this->logHistory($newTask, $task->created_by, 'recurrence_generated', [
+            'from_task_id' => $task->id,
+        ]);
+    }
+
+    private function logHistory(Task $task, ?int $userId, string $action, array $payload = []): void
+    {
+        TaskHistory::create([
+            'task_id' => $task->id,
+            'user_id' => $userId,
+            'action' => $action,
+            'payload' => $payload ?: null,
+        ]);
     }
 }

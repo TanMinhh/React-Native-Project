@@ -9,6 +9,7 @@ use App\Models\Notification;
 use App\Models\Opportunity;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\Team;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -58,6 +59,7 @@ class DashboardController extends Controller
 
         $today = now()->toDateString();
         $staleDate = now()->subDays(7);
+        $startDate = now()->subDays(6)->startOfDay();
 
         return response()->json([
             'leads_total' => $leadQuery->count(),
@@ -70,6 +72,40 @@ class DashboardController extends Controller
             'opportunities_by_stage' => (clone $oppQuery)->selectRaw('stage, COUNT(*) as total')->groupBy('stage')->pluck('total','stage'),
             'recent_activities' => (clone $activityQuery)->orderByDesc('happened_at')->limit(10)->get(),
             'notifications_unread' => $notificationQuery->where('is_read', false)->count(),
+            'leads_by_day' => (clone $leadQuery)
+                ->where('created_at', '>=', $startDate)
+                ->selectRaw('DATE(created_at) as date, COUNT(*) as total')
+                ->groupBy('date')
+                ->orderBy('date', 'asc')
+                ->get(),
+            'tasks_by_day' => (clone $taskQuery)
+                ->where('created_at', '>=', $startDate)
+                ->selectRaw('DATE(created_at) as date, COUNT(*) as total')
+                ->groupBy('date')
+                ->orderBy('date', 'asc')
+                ->get(),
+            'lead_conversion_rate' => [
+                'purchased' => (clone $leadQuery)->where('status', Lead::STATUS_PURCHASED)->count(),
+                'total' => (clone $leadQuery)->count(),
+            ],
+            'team_performance' => Team::with('manager')
+                ->get()
+                ->map(function ($team) use ($leadQuery, $taskQuery, $oppQuery) {
+                    $teamLeadQuery = (clone $leadQuery)->where('team_id', $team->id);
+                    $teamTaskQuery = (clone $taskQuery)->where('team_id', $team->id);
+                    $teamOppQuery = (clone $oppQuery)->whereHas('lead', function($q) use ($team) {
+                        $q->where('team_id', $team->id);
+                    });
+
+                    return [
+                        'team_id' => $team->id,
+                        'team_name' => $team->name,
+                        'manager' => $team->manager?->name,
+                        'leads' => $teamLeadQuery->count(),
+                        'tasks' => $teamTaskQuery->count(),
+                        'expected_revenue' => (float) $teamOppQuery->sum('expected_revenue'),
+                    ];
+                }),
         ]);
     }
 }

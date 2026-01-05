@@ -18,7 +18,8 @@ class Lead extends Model
     public const STATUS_PURCHASED = 'PURCHASED';
 
     protected $fillable = [
-        'full_name','email','phone_number','company','source',
+        'full_name','email','phone_number','company','budget','address','note','last_contact_at','source',
+        'score','priority','source_detail','campaign','custom_fields',
         'status','owner_id','assigned_to','assigned_by','assigned_at','last_activity_at','unread_by_owner','team_id'
     ];
 
@@ -26,6 +27,9 @@ class Lead extends Model
         'unread_by_owner' => 'bool',
         'assigned_at' => 'datetime',
         'last_activity_at' => 'datetime',
+        'last_contact_at' => 'datetime',
+        'last_follow_up_notified_at' => 'datetime',
+        'custom_fields' => 'array',
     ];
 
     public function owner(): BelongsTo
