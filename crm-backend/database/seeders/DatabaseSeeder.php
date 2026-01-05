@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             LeadAssignmentLogSeeder::class,
             OpportunitySeeder::class,
             TaskSeeder::class,
+            TaskTemplateSeeder::class,
             ActivitySeeder::class,
             NotificationSeeder::class,
             AttachmentSeeder::class,

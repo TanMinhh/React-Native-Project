@@ -13,6 +13,10 @@ use App\Models\Notification;
 use App\Models\UserDevice;
 use App\Models\User;
 use App\Models\AuditLog;
+use App\Models\Attachment;
+use App\Models\Task;
+use App\Models\Opportunity;
+use App\Models\Team;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Auth;
@@ -69,6 +73,37 @@ class LeadController extends Controller
                   ->orWhere('last_activity_at', '<', now()->subDays((int)$stale));
             });
         }
+        if ($scoreMin = $request->input('score_min')) {
+            $query->where('score', '>=', (int) $scoreMin);
+        }
+        if ($scoreMax = $request->input('score_max')) {
+            $query->where('score', '<=', (int) $scoreMax);
+        }
+        if ($priority = $request->input('priority')) {
+            $query->where('priority', $priority);
+        }
+        if ($budgetMin = $request->input('budget_min')) {
+            $query->where('budget', '>=', (float) $budgetMin);
+        }
+        if ($budgetMax = $request->input('budget_max')) {
+            $query->where('budget', '<=', (float) $budgetMax);
+        }
+        if ($sourceDetail = $request->input('source_detail')) {
+            $query->where('source_detail', $sourceDetail);
+        }
+        if ($campaign = $request->input('campaign')) {
+            $query->where('campaign', $campaign);
+        }
+        if ($lastActivityBefore = $request->input('last_activity_before')) {
+            $query->whereDate('last_activity_at', '<=', $lastActivityBefore);
+        }
+        if ($lastActivityAfter = $request->input('last_activity_after')) {
+            $query->whereDate('last_activity_at', '>=', $lastActivityAfter);
+        }
+        if ($request->boolean('follow_up_due')) {
+            $query->whereNotNull('last_activity_at')
+                ->whereRaw('last_activity_at < DATE_SUB(NOW(), INTERVAL IFNULL(follow_up_sla_days, 3) DAY)');
+        }
 
         return LeadResource::collection($query->paginate(10));
     }
@@ -111,9 +146,16 @@ class LeadController extends Controller
         if (!empty($data['assigned_to']) && !($user->isAdmin() || $user->isOwner())) {
             $data['assigned_to'] = $user->id;
         }
+        if (empty($data['assigned_to'])) {
+            $data['assigned_to'] = $this->assignRoundRobin($data['team_id'] ?? $user->team_id) ?? $user->id;
+        }
         if (!empty($data['assigned_to'])) {
             $data['assigned_by'] = $user->id;
             $data['assigned_at'] = now();
+        }
+        if (empty($data['team_id'])) {
+            $assignedUser = User::find($data['assigned_to']);
+            $data['team_id'] = $assignedUser?->team_id ?? $user->team_id;
         }
         $data['unread_by_owner'] = true;
         
@@ -163,6 +205,138 @@ class LeadController extends Controller
     {
         $this->authorize('view', $lead);
         return $lead->activities()->with('user')->orderBy('created_at', 'desc')->get();
+    }
+
+    public function careHistory(Lead $lead)
+    {
+        $this->authorize('view', $lead);
+
+        $activities = $lead->activities()
+            ->selectRaw("DATE(COALESCE(happened_at, created_at)) as date, COUNT(*) as total")
+            ->groupBy('date')
+            ->orderBy('date', 'desc')
+            ->get();
+
+        $tasks = Task::where('lead_id', $lead->id)
+            ->selectRaw("DATE(created_at) as date, COUNT(*) as total")
+            ->groupBy('date')
+            ->orderBy('date', 'desc')
+            ->get();
+
+        $activityMap = $activities->keyBy('date');
+        $taskMap = $tasks->keyBy('date');
+        $dates = $activities->pluck('date')->merge($tasks->pluck('date'))->unique()->sortDesc()->values();
+
+        $history = $dates->map(function ($date) use ($activityMap, $taskMap) {
+            return [
+                'date' => $date,
+                'activities' => (int) ($activityMap[$date]->total ?? 0),
+                'tasks' => (int) ($taskMap[$date]->total ?? 0),
+            ];
+        });
+
+        return response()->json(['data' => $history]);
+    }
+
+    public function timeline(Lead $lead)
+    {
+        $this->authorize('view', $lead);
+
+        $activities = $lead->activities()->with('user')->get()->map(function ($activity) {
+            return [
+                'type' => 'ACTIVITY',
+                'happened_at' => optional($activity->happened_at ?? $activity->created_at)->toIso8601String(),
+                'data' => $activity,
+            ];
+        });
+
+        $tasks = Task::where('lead_id', $lead->id)->with('assignedUser')->get()->map(function ($task) {
+            return [
+                'type' => 'TASK',
+                'happened_at' => optional($task->created_at)->toIso8601String(),
+                'data' => $task,
+            ];
+        });
+
+        $attachments = Attachment::where('lead_id', $lead->id)->get()->map(function ($attachment) {
+            return [
+                'type' => 'ATTACHMENT',
+                'happened_at' => optional($attachment->created_at)->toIso8601String(),
+                'data' => $attachment,
+            ];
+        });
+
+        $opportunities = Opportunity::where('lead_id', $lead->id)->get()->map(function ($opportunity) {
+            return [
+                'type' => 'OPPORTUNITY',
+                'happened_at' => optional($opportunity->created_at)->toIso8601String(),
+                'data' => $opportunity,
+            ];
+        });
+
+        $timeline = $activities
+            ->concat($tasks)
+            ->concat($attachments)
+            ->concat($opportunities)
+            ->sortByDesc(function ($item) {
+                return $item['happened_at'] ?? '';
+            })
+            ->values();
+
+        return response()->json(['data' => $timeline]);
+    }
+
+    public function duplicates(Request $request)
+    {
+        $request->validate([
+            'lead_id' => 'nullable|exists:leads,id',
+            'email' => 'nullable|email',
+            'phone_number' => 'nullable|string',
+        ]);
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $leadId = $request->input('lead_id');
+        $email = $request->input('email');
+        $phone = $request->input('phone_number');
+
+        if ($leadId) {
+            $lead = Lead::findOrFail($leadId);
+            $email = $lead->email;
+            $phone = $lead->phone_number;
+        }
+
+        if (!$email && !$phone) {
+            return LeadResource::collection(collect());
+        }
+
+        $query = Lead::query();
+        if ($user->isAdmin()) {
+            // no filter
+        } elseif ($user->isOwner()) {
+            $teamIds = $user->teamMembers()->pluck('id')->toArray();
+            $query->where(function($q) use ($user, $teamIds) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhere('owner_id', $user->id)
+                  ->orWhereIn('assigned_to', $teamIds);
+            });
+        } else {
+            $query->where(function($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                  ->orWhere('owner_id', $user->id);
+            });
+        }
+        if ($email) {
+            $query->orWhere('email', $email);
+        }
+        if ($phone) {
+            $query->orWhere('phone_number', $phone);
+        }
+        if ($leadId) {
+            $query->where('id', '!=', $leadId);
+        }
+
+        return LeadResource::collection($query->limit(20)->get());
     }
 
     public function assign(Request $request, Lead $lead)
@@ -256,5 +430,33 @@ class LeadController extends Controller
         ]);
 
         return new LeadResource($lead->fresh(['owner','assignee']));
+    }
+
+    private function assignRoundRobin(?int $teamId): ?int
+    {
+        if (!$teamId) {
+            return null;
+        }
+
+        $team = Team::with('salesMembers')->find($teamId);
+        if (!$team || $team->salesMembers->isEmpty()) {
+            return null;
+        }
+
+        $memberIds = $team->salesMembers->pluck('id')->sort()->values();
+        $lastAssigned = $team->last_assigned_user_id;
+        $nextIndex = 0;
+
+        if ($lastAssigned) {
+            $currentIndex = $memberIds->search($lastAssigned);
+            if ($currentIndex !== false) {
+                $nextIndex = ($currentIndex + 1) % $memberIds->count();
+            }
+        }
+
+        $nextId = $memberIds[$nextIndex];
+        $team->update(['last_assigned_user_id' => $nextId]);
+
+        return $nextId;
     }
 }

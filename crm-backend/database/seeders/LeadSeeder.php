@@ -17,6 +17,8 @@ class LeadSeeder extends Seeder
         $statuses = ['LEAD', 'CONTACTED', 'CARING', 'PURCHASED', 'NO_NEED'];
         
         $leadCount = 1;
+        $usedPhones = [];
+        $usedEmails = [];
         
         foreach ($teams as $team) {
             $manager = $team->manager;
@@ -30,13 +32,31 @@ class LeadSeeder extends Seeder
             foreach (range(1, 8) as $i) {
                 $assignedTo = $salesMembers->random();
                 
+                $phone = null;
+                while (!$phone || isset($usedPhones[$phone])) {
+                    $phone = '09' . str_pad((string) rand(0, 99999999), 8, '0', STR_PAD_LEFT);
+                }
+                $usedPhones[$phone] = true;
+
+                $email = null;
+                while (!$email || isset($usedEmails[$email])) {
+                    $email = 'customer' . rand(1, 999999) . '@email.com';
+                }
+                $usedEmails[$email] = true;
+
                 DB::table('leads')->insert([
                     'full_name' => "Khách hàng {$leadCount}",
-                    'email' => "customer{$leadCount}@email.com",
-                    'phone_number' => '09' . str_pad($leadCount, 8, '0', STR_PAD_LEFT),
+                    'email' => $email,
+                    'phone_number' => $phone,
                     'company' => "Công ty " . chr(64 + $leadCount),
+                    'budget' => rand(5, 200) * 1000000,
                     'status' => $statuses[array_rand($statuses)],
                     'source' => $sources[array_rand($sources)],
+                    'source_detail' => 'source_' . rand(1, 5),
+                    'campaign' => 'campaign_' . rand(1, 3),
+                    'score' => rand(10, 90),
+                    'priority' => ['LOW', 'MEDIUM', 'HIGH'][array_rand(['LOW', 'MEDIUM', 'HIGH'])],
+                    'custom_fields' => json_encode(['industry' => 'retail', 'size' => rand(1, 100)]),
                     'owner_id' => $assignedTo->id,
                     'assigned_to' => $assignedTo->id,
                     'assigned_by' => $manager->id,
