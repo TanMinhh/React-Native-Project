@@ -86,20 +86,20 @@ class NotificationSeeder extends Seeder
                     ]);
                 }
 
-                // 4. No follow-up notifications for CARING leads (7 days)
-                $caringLeads = $teamLeads->where('assigned_to', $sales->id)
-                    ->where('status', Lead::STATUS_CARING)
+                // 4. No follow-up notifications for INTERESTED leads (7 days)
+                $interestedLeads = $teamLeads->where('assigned_to', $sales->id)
+                    ->where('status', Lead::STATUS_INTERESTED)
                     ->take(1);
-                foreach ($caringLeads as $lead) {
+                foreach ($interestedLeads as $lead) {
                     Notification::create([
                         'user_id' => $sales->id,
                         'type' => Notification::TYPE_NO_FOLLOW_UP,
-                        'content' => "Khách hàng \"{$lead->full_name}\" (Đang chăm sóc) chưa có hoạt động trong 7 ngày qua",
+                        'content' => "Khách hàng \"{$lead->full_name}\" (Quan tâm) chưa có hoạt động trong 7 ngày qua",
                         'payload' => [
                             'lead_id' => $lead->id,
-                            'lead_status' => Lead::STATUS_CARING,
+                            'lead_status' => Lead::STATUS_INTERESTED,
                             'days_since_activity' => 7,
-                            'reason' => 'caring_no_activity_7_days',
+                            'reason' => 'interested_no_activity_7_days',
                         ],
                         'is_read' => false,
                         'created_at' => now()->subHours(rand(1, 12)),
@@ -107,9 +107,9 @@ class NotificationSeeder extends Seeder
                     ]);
                 }
 
-                // 5. No follow-up notifications for LEAD status (3 days)
+                // 5. No follow-up notifications for LEAD_NEW status (3 days)
                 $newLeads = $teamLeads->where('assigned_to', $sales->id)
-                    ->where('status', Lead::STATUS_LEAD)
+                    ->where('status', Lead::STATUS_LEAD_NEW)
                     ->take(1);
                 foreach ($newLeads as $lead) {
                     Notification::create([
@@ -118,7 +118,7 @@ class NotificationSeeder extends Seeder
                         'content' => "Lead \"{$lead->full_name}\" chưa có hoạt động trong 3 ngày qua",
                         'payload' => [
                             'lead_id' => $lead->id,
-                            'lead_status' => Lead::STATUS_LEAD,
+                            'lead_status' => Lead::STATUS_LEAD_NEW,
                             'days_since_activity' => 3,
                             'reason' => 'lead_no_activity_3_days',
                         ],

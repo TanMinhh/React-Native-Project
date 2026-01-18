@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\OpportunityController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\NoteController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\UserController;
@@ -42,6 +43,12 @@ Route::middleware('jwt')->group(function () {
     Route::apiResource('lead-filters', LeadFilterController::class)->only(['index','store','update','destroy']);
     Route::post('/activities',[ActivityController::class,'store']);
     Route::post('/leads/{lead}/merge', [LeadController::class, 'merge']);
+    
+    // Note routes
+    Route::get('/leads/{lead}/notes', [NoteController::class, 'index']);
+    Route::post('/notes', [NoteController::class, 'store']);
+    Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
+    
     Route::apiResource('tasks',TaskController::class)->only(['index','store','show','update','destroy']);
     Route::get('/tasks/{task}/subtasks', [TaskSubtaskController::class, 'index']);
     Route::post('/tasks/{task}/subtasks', [TaskSubtaskController::class, 'store']);
@@ -60,7 +67,9 @@ Route::middleware('jwt')->group(function () {
     Route::get('/notifications',[NotificationController::class,'index']);
     Route::get('/notifications/{notification}',[NotificationController::class,'show']);
     Route::put('/notifications/{notification}/read',[NotificationController::class,'markAsRead']);
+    Route::put('/notifications/{notification}/unread',[NotificationController::class,'markAsUnread']);
     Route::put('/notifications/read-all',[NotificationController::class,'markAllAsRead']);
+    Route::delete('/notifications/{notification}',[NotificationController::class,'destroy']);
     Route::get('/notifications-badge',[NotificationController::class,'badge']);
     Route::get('/notifications/task-due-soon',[NotificationController::class,'taskDueSoon']);
     Route::post('/notifications/task-reminders',[NotificationController::class,'taskReminders']);

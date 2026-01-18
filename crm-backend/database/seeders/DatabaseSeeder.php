@@ -8,16 +8,13 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // Use ComprehensiveTestSeeder for rich test data
+        // This creates all users, teams, leads, tasks, activities, notes, notifications, opportunities
         $this->call([
-            TeamSeeder::class,  // Creates teams, managers, and sales
-            LeadSeeder::class,
-            LeadAssignmentLogSeeder::class,
-            OpportunitySeeder::class,
-            TaskSeeder::class,
-            TaskTemplateSeeder::class,
-            ActivitySeeder::class,
-            NotificationSeeder::class,
-            AttachmentSeeder::class,
+            ComprehensiveTestSeeder::class,
         ]);
+
+        // Optional: Uncomment to add task templates
+        // $this->call([TaskTemplateSeeder::class]);
     }
 }

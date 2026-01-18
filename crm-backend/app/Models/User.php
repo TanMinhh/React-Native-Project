@@ -44,6 +44,24 @@ class User extends Authenticatable
         return $this->role === self::STAFF;
     }
 
+    /**
+     * Check if user is a manager (admin or owner)
+     * Alias method for frontend compatibility
+     */
+    public function isManager(): bool
+    {
+        return $this->isAdmin() || $this->isOwner();
+    }
+
+    /**
+     * Check if user is a sales staff
+     * Alias method for frontend compatibility
+     */
+    public function isSales(): bool
+    {
+        return $this->isStaff();
+    }
+
     public function hasRole(array $roles): bool
     {
         return in_array($this->role, $roles, true);

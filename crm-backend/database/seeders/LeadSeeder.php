@@ -14,7 +14,8 @@ class LeadSeeder extends Seeder
         $teams = Team::with(['manager', 'salesMembers'])->get();
         
         $sources = ['website', 'facebook', 'referral', 'cold_call', 'event'];
-        $statuses = ['LEAD', 'CONTACTED', 'CARING', 'PURCHASED', 'NO_NEED'];
+        // Updated statuses according to States.txt
+        $statuses = ['LEAD_NEW', 'CONTACTED', 'INTERESTED', 'QUALIFIED', 'WON', 'LOST'];
         
         $leadCount = 1;
         $usedPhones = [];

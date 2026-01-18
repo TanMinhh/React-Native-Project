@@ -28,7 +28,7 @@ class LeadRequest extends FormRequest
             'score'         => 'nullable|integer|min:0|max:100',
             'priority'      => 'nullable|in:LOW,MEDIUM,HIGH',
             'custom_fields' => 'nullable|array',
-            'status'        => 'nullable|in:LEAD,CONTACTED,CARING,NO_NEED,PURCHASED',
+            'status'        => 'nullable|in:LEAD_NEW,CONTACTED,INTERESTED,QUALIFIED,WON,LOST',
             'owner_id'      => 'sometimes|exists:users,id',
             'assigned_to'   => 'sometimes|nullable|exists:users,id',
             'team_id'       => 'sometimes|nullable|exists:teams,id',

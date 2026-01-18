@@ -14,14 +14,29 @@ class TaskPolicy
 
     public function view(User $user, Task $task): bool
     {
-        if ($user->isAdmin() || $task->assigned_to === $user->id) {
+        if ($user->isAdmin()) {
+            return true;
+        }
+        
+        // User is assigned the task
+        if ($task->assigned_to === $user->id) {
             return true;
         }
 
         // Manager can view tasks of team members
-        if ($user->isOwner() && $task->assigned_to) {
-            $assignee = User::find($task->assigned_to);
-            return $assignee && $assignee->manager_id === $user->id;
+        if ($user->isOwner()) {
+            // Check team-based access
+            if ($task->team_id && $task->team_id === $user->team_id) {
+                return true;
+            }
+            
+            // Check manager-based access
+            if ($task->assigned_to) {
+                $assignee = User::find($task->assigned_to);
+                if ($assignee && $assignee->manager_id === $user->id) {
+                    return true;
+                }
+            }
         }
 
         return false;
@@ -29,34 +44,17 @@ class TaskPolicy
 
     public function create(User $user): bool
     {
+        // All authenticated users can create tasks
         return $user->isAdmin() || $user->isOwner() || $user->isStaff();
     }
 
     public function update(User $user, Task $task): bool
     {
-        if ($user->isAdmin() || $task->assigned_to === $user->id) {
-            return true;
-        }
-
-        if ($user->isOwner() && $task->assigned_to) {
-            $assignee = User::find($task->assigned_to);
-            return $assignee && $assignee->manager_id === $user->id;
-        }
-
-        return false;
+        return $this->view($user, $task);
     }
 
     public function delete(User $user, Task $task): bool
     {
-        if ($user->isAdmin() || $task->assigned_to === $user->id) {
-            return true;
-        }
-
-        if ($user->isOwner() && $task->assigned_to) {
-            $assignee = User::find($task->assigned_to);
-            return $assignee && $assignee->manager_id === $user->id;
-        }
-
-        return false;
+        return $this->view($user, $task);
     }
 }

@@ -8,27 +8,27 @@ use App\Models\Lead;
 use App\Models\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class NoteController extends Controller
 {
+    use AuthorizesRequests;
+
     public function index(Request $request, Lead $lead)
     {
+        // Use LeadPolicy to check access
+        $this->authorize('view', $lead);
+
         /** @var \App\Models\User $user */
         $user = Auth::user();
-
-        // Check if user has access to this lead
-        if (!$user->isManager() && $lead->owner_id !== $user->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
         $query = $lead->notes();
 
-        // If user is sales, only show normal notes
-        if ($user->isSales()) {
+        // If user is sales (staff), only show normal notes (not manager notes)
+        if ($user->isStaff()) {
             $query->normal();
         }
 
-        return response()->json($query->get());
+        return response()->json($query->orderByDesc('created_at')->get());
     }
 
     public function store(Request $request)
@@ -44,12 +44,10 @@ class NoteController extends Controller
         $user = Auth::user();
         $lead = Lead::findOrFail($request->lead_id);
 
-        // Check if user has access to this lead
-        if (!$user->isManager() && $lead->owner_id !== $user->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
+        // Use LeadPolicy to check access
+        $this->authorize('view', $lead);
 
-        // Only managers can create manager notes
+        // Only managers (admin/owner) can create manager notes
         $type = Note::TYPE_NORMAL;
         if ($user->isManager() && $request->type === Note::TYPE_MANAGER) {
             $type = Note::TYPE_MANAGER;
@@ -66,6 +64,7 @@ class NoteController extends Controller
         // Create activity for note
         Activity::create([
             'type' => 'NOTE',
+            'title' => $request->title,
             'content' => "Thêm ghi chú: {$request->title}",
             'lead_id' => $lead->id,
             'user_id' => $user->id,

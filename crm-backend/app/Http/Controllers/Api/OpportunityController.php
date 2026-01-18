@@ -7,6 +7,7 @@ use App\Http\Requests\OpportunityRequest;
 use App\Http\Resources\OpportunityResource;
 use App\Models\Opportunity;
 use App\Models\OpportunityStageHistory;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -24,11 +25,24 @@ class OpportunityController extends Controller
             abort(403, 'Staff cannot access opportunities.');
         }
 
-        $query = Opportunity::with(['owner', 'lead'])
-            ->when(!$user->isAdmin(), function ($q) use ($user) {
-                $q->where('owner_id', $user->id);
-            })
-            ->search($request->search);
+        $query = Opportunity::with(['owner', 'lead']);
+        
+        // Role-based visibility
+        if ($user->isAdmin()) {
+            // Admin sees all
+        } elseif ($user->isOwner()) {
+            // Manager sees own + team members' opportunities
+            $teamMemberIds = $user->teamMembers()->pluck('id')->toArray();
+            $query->where(function($q) use ($user, $teamMemberIds) {
+                $q->where('owner_id', $user->id)
+                  ->orWhereIn('owner_id', $teamMemberIds);
+            });
+        } else {
+            // Other users see only their own
+            $query->where('owner_id', $user->id);
+        }
+        
+        $query->search($request->search);
 
         return OpportunityResource::collection($query->paginate(10));
     }
@@ -104,11 +118,23 @@ class OpportunityController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        $query = Opportunity::query();
         if ($user->isStaff()) {
             abort(403, 'Staff cannot access opportunities.');
         }
-        if (!$user->isAdmin()) {
+
+        $query = Opportunity::query();
+        
+        // Role-based visibility
+        if ($user->isAdmin()) {
+            // Admin sees all
+        } elseif ($user->isOwner()) {
+            // Manager sees own + team members' opportunities
+            $teamMemberIds = $user->teamMembers()->pluck('id')->toArray();
+            $query->where(function($q) use ($user, $teamMemberIds) {
+                $q->where('owner_id', $user->id)
+                  ->orWhereIn('owner_id', $teamMemberIds);
+            });
+        } else {
             $query->where('owner_id', $user->id);
         }
 
@@ -128,7 +154,18 @@ class OpportunityController extends Controller
         }
 
         $query = Opportunity::query();
-        if (!$user->isAdmin()) {
+        
+        // Role-based visibility
+        if ($user->isAdmin()) {
+            // Admin sees all
+        } elseif ($user->isOwner()) {
+            // Manager sees own + team members' opportunities
+            $teamMemberIds = $user->teamMembers()->pluck('id')->toArray();
+            $query->where(function($q) use ($user, $teamMemberIds) {
+                $q->where('owner_id', $user->id)
+                  ->orWhereIn('owner_id', $teamMemberIds);
+            });
+        } else {
             $query->where('owner_id', $user->id);
         }
 
@@ -143,13 +180,16 @@ class OpportunityController extends Controller
 
     private function defaultProbability(?string $stage): int
     {
+        // Stage-based probability mapping (fixed, not user-editable)
+        // New=10%, Qualified=30%, Proposal=50%, Negotiation=70%, Won=100%, Lost=0%
         return match ($stage) {
-            'PROSPECTING' => 10,
-            'PROPOSAL' => 30,
-            'NEGOTIATION' => 60,
+            'NEW' => 10,
+            'QUALIFIED' => 30,
+            'PROPOSAL' => 50,
+            'NEGOTIATION' => 70,
             'WON' => 100,
             'LOST' => 0,
-            default => 50,
+            default => 10,
         };
     }
 

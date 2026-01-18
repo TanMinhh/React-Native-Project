@@ -10,7 +10,7 @@ class AuthRequest extends FormRequest
     {
         $rules = [
             'email' => 'required|email',
-            'password' => 'required|min:12',
+            'password' => 'required|min:6',
         ];
 
         if ($this->routeIs('auth.register')) {

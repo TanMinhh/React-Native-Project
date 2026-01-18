@@ -43,6 +43,26 @@ class NotificationController extends Controller
         return $notification;
     }
 
+    public function markAsUnread(Notification $notification)
+    {
+        if ($notification->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized access to this notification.');
+        }
+
+        $notification->update(['is_read' => false]);
+        return $notification;
+    }
+
+    public function destroy(Notification $notification)
+    {
+        if ($notification->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized access to this notification.');
+        }
+
+        $notification->delete();
+        return response()->json(['message' => 'Notification deleted successfully']);
+    }
+
     public function badge()
     {
         $count = Notification::where('user_id', Auth::id())
